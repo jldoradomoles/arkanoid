@@ -58,10 +58,16 @@ function drawPaddle() {
   drawSprite( ctx, 'paddle', p.x, p.y, p.w, p.h );
 }
 
+function drawBall() {
+  const b = state.ball;
+  drawSprite( ctx, 'ball', b.x, b.y, b.size, b.size );
+}
+
 function render() {
   drawBackground();
   drawBlocks();
   drawPaddle();
+  drawBall();
 }
 
 const MAX_DT = 1 / 30;          // limita el delta time para evitar saltos tras pausas de pestaña
@@ -102,8 +108,66 @@ function updatePaddle( dt ) {
   if ( dir !== 0 ) setPaddleX( state.paddle.x + dir * state.paddle.speed * dt );
 }
 
+const LAUNCH_SPREAD = 15 * Math.PI / 180;   // desviación máxima aleatoria respecto a la vertical
+
+function stickBallToPaddle() {
+  const p = state.paddle;
+  const b = state.ball;
+  b.stuck = true;
+  b.vx = 0;
+  b.vy = 0;
+  b.x = p.x + p.w / 2 - b.size / 2;
+  b.y = p.y - b.size;
+}
+
+function launchBall() {
+  const b = state.ball;
+  if ( !b.stuck ) return;
+  const angle = ( Math.random() * 2 - 1 ) * LAUNCH_SPREAD;
+  b.vx = Math.sin( angle ) * b.speed;
+  b.vy = -Math.cos( angle ) * b.speed;
+  b.stuck = false;
+  state.phase = 'playing';
+}
+
+function updateBall( dt ) {
+  const b = state.ball;
+  if ( b.stuck ) {
+    stickBallToPaddle();
+    return;
+  }
+
+  b.x += b.vx * dt;
+  b.y += b.vy * dt;
+
+  // paredes laterales
+  if ( b.x < 0 ) {
+    b.x = 0;
+    b.vx = Math.abs( b.vx );
+  } else if ( b.x + b.size > CANVAS_W ) {
+    b.x = CANVAS_W - b.size;
+    b.vx = -Math.abs( b.vx );
+  }
+
+  // techo
+  if ( b.y < 0 ) {
+    b.y = 0;
+    b.vy = Math.abs( b.vy );
+  }
+}
+
+window.addEventListener( 'keydown', e => {
+  if ( e.code === 'Space' ) {
+    e.preventDefault();
+    if ( !e.repeat ) launchBall();
+  }
+} );
+
+canvas.addEventListener( 'mousedown', launchBall );
+
 function update( dt ) {
   updatePaddle( dt );
+  updateBall( dt );
 }
 
 let lastTime = 0;
