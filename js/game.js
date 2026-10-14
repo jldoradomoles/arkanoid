@@ -77,6 +77,32 @@ function drawHUD() {
   ctx.fillText( 'Vidas: ' + state.lives, CANVAS_W - 62, 40 );
 }
 
+function drawOverlay( title, lines ) {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+  ctx.fillRect( 0, 0, CANVAS_W, CANVAS_H );
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 56px monospace';
+  ctx.fillText( title, CANVAS_W / 2, CANVAS_H / 2 - 40 );
+  ctx.font = '22px monospace';
+  lines.forEach( ( line, i ) => ctx.fillText( line, CANVAS_W / 2, CANVAS_H / 2 + 20 + i * 32 ) );
+}
+
+function drawPhaseOverlay() {
+  switch ( state.phase ) {
+    case 'paused':
+      drawOverlay( 'PAUSA', [ 'Pulsa P para continuar' ] );
+      break;
+    case 'gameover':
+      drawOverlay( 'Game over', [ 'Puntuación final: ' + state.score, 'Pulsa Enter para reiniciar' ] );
+      break;
+    case 'won':
+      drawOverlay( '¡Victoria!', [ 'Puntuación final: ' + state.score, 'Pulsa Enter para reiniciar' ] );
+      break;
+  }
+}
+
 function drawBall() {
   const b = state.ball;
   drawSprite( ctx, 'ball', b.x, b.y, b.size, b.size );
@@ -89,6 +115,7 @@ function render() {
   drawPaddle();
   drawBall();
   drawHUD();
+  drawPhaseOverlay();
 }
 
 const MAX_DT = 1 / 30;          // limita el delta time para evitar saltos tras pausas de pestaña
@@ -114,6 +141,7 @@ window.addEventListener( 'keydown', e => setKey( e, true ) );
 window.addEventListener( 'keyup', e => setKey( e, false ) );
 
 canvas.addEventListener( 'mousemove', e => {
+  if ( state.phase === 'paused' ) return;
   const rect = canvas.getBoundingClientRect();
   const mouseX = ( e.clientX - rect.left ) * ( CANVAS_W / rect.width );
   setPaddleX( mouseX - state.paddle.w / 2 );
@@ -143,7 +171,7 @@ function stickBallToPaddle() {
 
 function launchBall() {
   const b = state.ball;
-  if ( !b.stuck ) return;
+  if ( !b.stuck || state.phase !== 'ready' ) return;
   const angle = ( Math.random() * 2 - 1 ) * LAUNCH_SPREAD;
   b.vx = Math.sin( angle ) * b.speed;
   b.vy = -Math.cos( angle ) * b.speed;
@@ -153,7 +181,7 @@ function launchBall() {
 
 function updateBall( dt ) {
   const b = state.ball;
-  if ( state.phase === 'gameover' ) return;
+  if ( state.phase === 'gameover' || state.phase === 'won' ) return;
   if ( b.stuck ) {
     stickBallToPaddle();
     return;
@@ -191,7 +219,7 @@ function loseLife() {
     state.phase = 'ready';
     stickBallToPaddle();
   } else {
-    // sin vidas: la bola queda detenida (la pantalla de game over llega en el paso 9)
+    // sin vidas: la bola queda detenida
     state.phase = 'gameover';
     b.vx = 0;
     b.vy = 0;
@@ -223,6 +251,12 @@ function collideBallWithBlocks() {
     blk.alive = false;
     state.score += BLOCK_POINTS;
     state.explosions.push( { x: blk.x, y: blk.y, color: blk.color, elapsed: 0 } );
+
+    if ( state.blocks.every( bl => !bl.alive ) ) {
+      state.phase = 'won';
+      b.vx = 0;
+      b.vy = 0;
+    }
     return;   // solo se destruye un bloque por frame
   }
 }
@@ -256,12 +290,43 @@ window.addEventListener( 'keydown', e => {
 
 canvas.addEventListener( 'mousedown', launchBall );
 
+let phaseBeforePause = 'ready';
+
+function togglePause() {
+  if ( state.phase === 'paused' ) {
+    state.phase = phaseBeforePause;
+  } else if ( state.phase === 'ready' || state.phase === 'playing' ) {
+    phaseBeforePause = state.phase;
+    state.phase = 'paused';
+  }
+}
+
+function resetGame() {
+  state.score = 0;
+  state.lives = 3;
+  state.paddle.x = 340;
+  state.blocks = createBlocks();
+  state.explosions = [];
+  state.phase = 'ready';
+  stickBallToPaddle();
+}
+
+window.addEventListener( 'keydown', e => {
+  if ( e.repeat ) return;
+  if ( e.code === 'KeyP' ) {
+    togglePause();
+  } else if ( e.code === 'Enter' && state.phase !== 'paused' ) {
+    resetGame();
+  }
+} );
+
 function updateExplosions( dt ) {
   for ( const ex of state.explosions ) ex.elapsed += dt * 1000;
   state.explosions = state.explosions.filter( ex => ex.elapsed < EXPLOSION_DURATION );
 }
 
 function update( dt ) {
+  if ( state.phase === 'paused' ) return;
   updatePaddle( dt );
   updateBall( dt );
   updateExplosions( dt );
