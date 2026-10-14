@@ -154,6 +154,28 @@ function updateBall( dt ) {
     b.y = 0;
     b.vy = Math.abs( b.vy );
   }
+
+  collideBallWithPaddle();
+}
+
+const MAX_BOUNCE_ANGLE = 60 * Math.PI / 180;   // respecto a la vertical, en los bordes de la paleta
+
+function collideBallWithPaddle() {
+  const b = state.ball;
+  const p = state.paddle;
+
+  // solo si la bola baja y se solapa con la paleta
+  if ( b.vy <= 0 ) return;
+  if ( b.x + b.size < p.x || b.x > p.x + p.w ) return;
+  if ( b.y + b.size < p.y || b.y > p.y + p.h ) return;
+
+  const offset = Math.max( -1, Math.min( 1,
+    ( b.x + b.size / 2 - ( p.x + p.w / 2 ) ) / ( p.w / 2 ) ) );
+  const angle = offset * MAX_BOUNCE_ANGLE;
+
+  b.vx = Math.sin( angle ) * b.speed;
+  b.vy = -Math.cos( angle ) * b.speed;   // siempre hacia arriba
+  b.y = p.y - b.size;                    // justo encima de la paleta
 }
 
 window.addEventListener( 'keydown', e => {
