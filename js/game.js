@@ -58,6 +58,15 @@ function drawPaddle() {
   drawSprite( ctx, 'paddle', p.x, p.y, p.w, p.h );
 }
 
+function drawExplosions() {
+  for ( const ex of state.explosions ) {
+    const frames = EXPLOSION_FRAMES[ ex.color ];
+    // los frames se reparten a partes iguales en EXPLOSION_DURATION
+    const i = Math.min( frames.length - 1, Math.floor( ex.elapsed / EXPLOSION_DURATION * frames.length ) );
+    drawFrame( ctx, frames[ i ], ex.x, ex.y, BLOCK_W, BLOCK_H );
+  }
+}
+
 function drawBall() {
   const b = state.ball;
   drawSprite( ctx, 'ball', b.x, b.y, b.size, b.size );
@@ -66,6 +75,7 @@ function drawBall() {
 function render() {
   drawBackground();
   drawBlocks();
+  drawExplosions();
   drawPaddle();
   drawBall();
 }
@@ -183,6 +193,7 @@ function collideBallWithBlocks() {
 
     blk.alive = false;
     state.score += BLOCK_POINTS;
+    state.explosions.push( { x: blk.x, y: blk.y, color: blk.color, elapsed: 0 } );
     return;   // solo se destruye un bloque por frame
   }
 }
@@ -216,9 +227,15 @@ window.addEventListener( 'keydown', e => {
 
 canvas.addEventListener( 'mousedown', launchBall );
 
+function updateExplosions( dt ) {
+  for ( const ex of state.explosions ) ex.elapsed += dt * 1000;
+  state.explosions = state.explosions.filter( ex => ex.elapsed < EXPLOSION_DURATION );
+}
+
 function update( dt ) {
   updatePaddle( dt );
   updateBall( dt );
+  updateExplosions( dt );
 }
 
 let lastTime = 0;
