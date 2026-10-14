@@ -154,10 +154,51 @@ function drawLevelBanner() {
   ctx.fillText( 'Nivel ' + state.level, CANVAS_W / 2, 440 );
 }
 
+// selector de nivel del menú de pausa: un botón por nivel (clic o teclas 1..N)
+const LEVEL_BTN = { w: 56, h: 56, gap: 16, y: 400 };
+
+function levelButtonRect( i ) {
+  const total = LEVELS.length * LEVEL_BTN.w + ( LEVELS.length - 1 ) * LEVEL_BTN.gap;
+  return {
+    x: ( CANVAS_W - total ) / 2 + i * ( LEVEL_BTN.w + LEVEL_BTN.gap ),
+    y: LEVEL_BTN.y,
+    w: LEVEL_BTN.w,
+    h: LEVEL_BTN.h,
+  };
+}
+
+function drawLevelSelector() {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '20px monospace';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText( 'Elegir nivel (clic o teclas 1-' + LEVELS.length + ')', CANVAS_W / 2, LEVEL_BTN.y - 24 );
+  for ( let i = 0; i < LEVELS.length; i++ ) {
+    const r = levelButtonRect( i );
+    const current = i + 1 === state.level;
+    ctx.fillStyle = current ? '#ffffff' : 'rgba(255, 255, 255, 0.1)';
+    ctx.fillRect( r.x, r.y, r.w, r.h );
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect( r.x, r.y, r.w, r.h );
+    ctx.fillStyle = current ? '#11111f' : '#ffffff';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillText( String( i + 1 ), r.x + r.w / 2, r.y + r.h / 2 );
+  }
+}
+
+// salta al nivel elegido desde la pausa; puntuación y vidas se conservan
+function selectLevel( level ) {
+  if ( state.phase !== 'paused' || level < 1 || level > LEVELS.length ) return;
+  state.explosions = [];
+  loadLevel( level );
+}
+
 function drawPhaseOverlay() {
   switch ( state.phase ) {
     case 'paused':
       drawOverlay( 'PAUSA', [ 'Pulsa P para continuar' ] );
+      drawLevelSelector();
       break;
     case 'gameover':
       drawOverlay( 'Game over', [ 'Puntuación final: ' + state.score, 'Pulsa Enter para reiniciar' ] );
@@ -378,7 +419,19 @@ window.addEventListener( 'keydown', e => {
   }
 } );
 
-canvas.addEventListener( 'mousedown', launchBall );
+canvas.addEventListener( 'mousedown', e => {
+  if ( state.phase === 'paused' ) {
+    const rect = canvas.getBoundingClientRect();
+    const mx = ( e.clientX - rect.left ) * ( CANVAS_W / rect.width );
+    const my = ( e.clientY - rect.top ) * ( CANVAS_H / rect.height );
+    for ( let i = 0; i < LEVELS.length; i++ ) {
+      const r = levelButtonRect( i );
+      if ( mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h ) selectLevel( i + 1 );
+    }
+    return;
+  }
+  launchBall();
+} );
 
 let phaseBeforePause = 'ready';
 
@@ -403,6 +456,8 @@ window.addEventListener( 'keydown', e => {
   if ( e.repeat ) return;
   if ( e.code === 'KeyP' ) {
     togglePause();
+  } else if ( /^Digit[1-9]$/.test( e.code ) ) {
+    selectLevel( Number( e.code.slice( 5 ) ) );
   } else if ( e.code === 'Enter' && state.phase !== 'paused' ) {
     resetGame();
   }
