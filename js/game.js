@@ -73,8 +73,13 @@ function drawHUD() {
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillText( 'Puntos: ' + state.score, 62, 40 );
-  ctx.textAlign = 'right';
-  ctx.fillText( 'Vidas: ' + state.lives, CANVAS_W - 62, 40 );
+  // vidas: una bola por vida, alineadas a la derecha
+  const LIFE_SIZE = 20;
+  const LIFE_GAP = 8;
+  for ( let i = 0; i < state.lives; i++ ) {
+    const x = CANVAS_W - 62 - LIFE_SIZE - i * ( LIFE_SIZE + LIFE_GAP );
+    drawSprite( ctx, 'ball', x, 40 - LIFE_SIZE / 2, LIFE_SIZE, LIFE_SIZE );
+  }
 }
 
 function drawOverlay( title, lines ) {
