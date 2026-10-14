@@ -17,8 +17,17 @@ Abre `index.html` en el navegador (doble clic, no necesita servidor).
 
 ### Reglas
 
-- Destruye los 60 bloques (6 filas x 10 columnas) con la bola. Cada bloque se rompe de un golpe y suma 10 puntos.
+- El juego tiene 3 niveles. Cada uno es un mapa distinto, generado al azar sobre una rejilla de 6 filas x 10 columnas, con huecos y simétrico. Destruye todos los bloques para pasar al siguiente; puntuación y vidas se conservan.
+- Los bloques de colores se rompen de un golpe y suman 10 puntos.
+- Los bloques grises (a partir del nivel 2) aguantan 2 golpes: tras el primero se ven más transparentes. Suman 30 puntos al romperse.
+- La bola va más rápida en cada nivel.
 - La bola empieza pegada a la paleta y también vuelve a estarlo tras perder una vida.
 - El ángulo con el que rebota la bola depende de dónde golpee la paleta: en el centro sale casi vertical y en los bordes con un ángulo más abierto (hasta 60°).
 - Tienes 3 vidas. Si la bola cae por debajo de la paleta pierdes una; con 0 vidas, game over.
-- Si destruyes todos los bloques, ganas.
+- Si destruyes todos los bloques del nivel 3, ganas.
+
+### Sonidos
+
+- Suena un rebote al golpear paredes, techo y paleta, y al golpear un bloque gris sin romperlo.
+- Suena un sonido distinto al destruir un bloque.
+- No hay sonido en pausa ni con la bola pegada. Si el navegador bloquea el audio, el juego sigue funcionando sin sonido.

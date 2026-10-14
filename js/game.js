@@ -17,28 +17,70 @@ const state = {
   phase: 'ready',               // 'ready' | 'playing' | 'paused' | 'gameover' | 'won'
   score: 0,
   lives: 3,
+  level: 1,                     // 1..LEVELS.length
   paddle: { x: 340, y: 560, w: 120, h: 14, speed: 600 },
   ball:   { x: 0, y: 0, size: 16, vx: 0, vy: 0, speed: 380, stuck: true },
-  blocks: [],                   // { x, y, w, h, color, alive }
+  blocks: [],                   // { x, y, w, h, color, alive, hp, points }
   explosions: [],               // { x, y, color, elapsed }
 };
 
-function createBlocks() {
+const LEVELS = [
+  { speed: 380, gapChance: 0.10, toughChance: 0.00 },   // nivel 1
+  { speed: 420, gapChance: 0.20, toughChance: 0.15 },   // nivel 2
+  { speed: 460, gapChance: 0.25, toughChance: 0.30 },   // nivel 3
+];
+const TOUGH_HITS = 2;
+const TOUGH_POINTS = 30;
+const DAMAGED_ALPHA = 0.6;      // opacidad del bloque resistente tras el primer golpe
+const MIN_BLOCKS = 20;          // mínimo de bloques vivos por mapa generado
+
+const SOUNDS = {
+  bounce: 'assets/sounds/ball-bounce.mp3',
+  break:  'assets/sounds/break-sound.mp3',
+};
+
+const audioCache = {};
+for ( const name in SOUNDS ) {
+  const audio = new Audio( SOUNDS[ name ] );
+  audio.preload = 'auto';
+  audioCache[ name ] = audio;
+}
+
+// clona el Audio precargado para permitir que los sonidos se solapen
+function playSound( name ) {
+  try {
+    const p = audioCache[ name ].cloneNode().play();
+    if ( p ) p.catch( () => {} );   // el navegador puede bloquear el audio
+  } catch ( e ) {}
+}
+
+// genera el mapa del nivel: huecos al azar en la mitad izquierda, espejados a la derecha
+function createBlocks( level ) {
+  const { gapChance, toughChance } = LEVELS[ level - 1 ];
   const gridW = COLS * BLOCK_W + ( COLS - 1 ) * BLOCK_GAP;
   const left = ( CANVAS_W - gridW ) / 2;
-  const blocks = [];
-  BLOCK_COLORS.forEach( ( color, row ) => {
-    for ( let col = 0; col < COLS; col++ ) {
-      blocks.push( {
-        x: left + col * ( BLOCK_W + BLOCK_GAP ),
-        y: GRID_TOP + row * ( BLOCK_H + BLOCK_GAP ),
-        w: BLOCK_W,
-        h: BLOCK_H,
-        color,
-        alive: true,
-      } );
-    }
-  } );
+  let blocks;
+  do {
+    blocks = [];
+    BLOCK_COLORS.forEach( ( color, row ) => {
+      for ( let col = 0; col < COLS / 2; col++ ) {
+        if ( Math.random() < gapChance ) continue;
+        const tough = Math.random() < toughChance;   // la celda espejada comparte tipo
+        for ( const c of [ col, COLS - 1 - col ] ) {
+          blocks.push( {
+            x: left + c * ( BLOCK_W + BLOCK_GAP ),
+            y: GRID_TOP + row * ( BLOCK_H + BLOCK_GAP ),
+            w: BLOCK_W,
+            h: BLOCK_H,
+            color: tough ? 'gray' : color,
+            alive: true,
+            hp: tough ? TOUGH_HITS : 1,
+            points: tough ? TOUGH_POINTS : BLOCK_POINTS,
+          } );
+        }
+      }
+    } );
+  } while ( blocks.length < MIN_BLOCKS );
   return blocks;
 }
 
@@ -49,7 +91,12 @@ function drawBackground() {
 
 function drawBlocks() {
   for ( const b of state.blocks ) {
-    if ( b.alive ) drawSprite( ctx, 'block_' + b.color, b.x, b.y, b.w, b.h );
+    if ( !b.alive ) continue;
+    // el bloque resistente dañado se dibuja con menos opacidad
+    const damaged = b.color === 'gray' && b.hp < TOUGH_HITS;
+    if ( damaged ) ctx.globalAlpha = DAMAGED_ALPHA;
+    drawSprite( ctx, 'block_' + b.color, b.x, b.y, b.w, b.h );
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -73,6 +120,9 @@ function drawHUD() {
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillText( 'Puntos: ' + state.score, 62, 40 );
+  ctx.textAlign = 'center';
+  ctx.fillText( 'Nivel ' + state.level, CANVAS_W / 2, 40 );
+  ctx.textAlign = 'left';
   // vidas: una bola por vida, alineadas a la derecha
   const LIFE_SIZE = 20;
   const LIFE_GAP = 8;
@@ -92,6 +142,16 @@ function drawOverlay( title, lines ) {
   ctx.fillText( title, CANVAS_W / 2, CANVAS_H / 2 - 40 );
   ctx.font = '22px monospace';
   lines.forEach( ( line, i ) => ctx.fillText( line, CANVAS_W / 2, CANVAS_H / 2 + 20 + i * 32 ) );
+}
+
+// rótulo "Nivel N" sin oscurecer el canvas, mientras la bola está pegada
+function drawLevelBanner() {
+  if ( state.phase !== 'ready' ) return;
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 48px monospace';
+  ctx.fillText( 'Nivel ' + state.level, CANVAS_W / 2, 440 );
 }
 
 function drawPhaseOverlay() {
@@ -120,6 +180,7 @@ function render() {
   drawPaddle();
   drawBall();
   drawHUD();
+  drawLevelBanner();
   drawPhaseOverlay();
 }
 
@@ -199,15 +260,18 @@ function updateBall( dt ) {
   if ( b.x < 0 ) {
     b.x = 0;
     b.vx = Math.abs( b.vx );
+    playSound( 'bounce' );
   } else if ( b.x + b.size > CANVAS_W ) {
     b.x = CANVAS_W - b.size;
     b.vx = -Math.abs( b.vx );
+    playSound( 'bounce' );
   }
 
   // techo
   if ( b.y < 0 ) {
     b.y = 0;
     b.vy = Math.abs( b.vy );
+    playSound( 'bounce' );
   }
 
   collideBallWithPaddle();
@@ -229,6 +293,15 @@ function loseLife() {
     b.vx = 0;
     b.vy = 0;
   }
+}
+
+// carga el mapa y la velocidad del nivel; puntuación, vidas y explosiones en curso se conservan
+function loadLevel( level ) {
+  state.level = level;
+  state.ball.speed = LEVELS[ level - 1 ].speed;
+  state.blocks = createBlocks( level );
+  state.phase = 'ready';
+  stickBallToPaddle();
 }
 
 function collideBallWithBlocks() {
@@ -253,14 +326,25 @@ function collideBallWithBlocks() {
       b.vy = fromTop ? -Math.abs( b.vy ) : Math.abs( b.vy );
     }
 
+    blk.hp--;
+    if ( blk.hp > 0 ) {
+      playSound( 'bounce' );   // el bloque resistente sobrevive
+      return;
+    }
+
     blk.alive = false;
-    state.score += BLOCK_POINTS;
+    state.score += blk.points;
+    playSound( 'break' );
     state.explosions.push( { x: blk.x, y: blk.y, color: blk.color, elapsed: 0 } );
 
     if ( state.blocks.every( bl => !bl.alive ) ) {
-      state.phase = 'won';
-      b.vx = 0;
-      b.vy = 0;
+      if ( state.level < LEVELS.length ) {
+        loadLevel( state.level + 1 );
+      } else {
+        state.phase = 'won';
+        b.vx = 0;
+        b.vy = 0;
+      }
     }
     return;   // solo se destruye un bloque por frame
   }
@@ -284,6 +368,7 @@ function collideBallWithPaddle() {
   b.vx = Math.sin( angle ) * b.speed;
   b.vy = -Math.cos( angle ) * b.speed;   // siempre hacia arriba
   b.y = p.y - b.size;                    // justo encima de la paleta
+  playSound( 'bounce' );
 }
 
 window.addEventListener( 'keydown', e => {
@@ -310,10 +395,8 @@ function resetGame() {
   state.score = 0;
   state.lives = 3;
   state.paddle.x = 340;
-  state.blocks = createBlocks();
   state.explosions = [];
-  state.phase = 'ready';
-  stickBallToPaddle();
+  loadLevel( 1 );
 }
 
 window.addEventListener( 'keydown', e => {
@@ -347,7 +430,8 @@ function frame( now ) {
   requestAnimationFrame( frame );
 }
 
-state.blocks = createBlocks();
+state.ball.speed = LEVELS[ 0 ].speed;
+state.blocks = createBlocks( state.level );
 
 loadSpritesheet( () => {
   lastTime = performance.now();
