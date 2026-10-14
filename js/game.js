@@ -67,6 +67,16 @@ function drawExplosions() {
   }
 }
 
+function drawHUD() {
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '20px monospace';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillText( 'Puntos: ' + state.score, 62, 40 );
+  ctx.textAlign = 'right';
+  ctx.fillText( 'Vidas: ' + state.lives, CANVAS_W - 62, 40 );
+}
+
 function drawBall() {
   const b = state.ball;
   drawSprite( ctx, 'ball', b.x, b.y, b.size, b.size );
@@ -78,6 +88,7 @@ function render() {
   drawExplosions();
   drawPaddle();
   drawBall();
+  drawHUD();
 }
 
 const MAX_DT = 1 / 30;          // limita el delta time para evitar saltos tras pausas de pestaña
@@ -142,6 +153,7 @@ function launchBall() {
 
 function updateBall( dt ) {
   const b = state.ball;
+  if ( state.phase === 'gameover' ) return;
   if ( b.stuck ) {
     stickBallToPaddle();
     return;
@@ -167,6 +179,23 @@ function updateBall( dt ) {
 
   collideBallWithPaddle();
   collideBallWithBlocks();
+
+  // la bola cae por debajo del canvas
+  if ( b.y > CANVAS_H ) loseLife();
+}
+
+function loseLife() {
+  const b = state.ball;
+  state.lives--;
+  if ( state.lives > 0 ) {
+    state.phase = 'ready';
+    stickBallToPaddle();
+  } else {
+    // sin vidas: la bola queda detenida (la pantalla de game over llega en el paso 9)
+    state.phase = 'gameover';
+    b.vx = 0;
+    b.vy = 0;
+  }
 }
 
 function collideBallWithBlocks() {
