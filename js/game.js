@@ -156,6 +156,35 @@ function updateBall( dt ) {
   }
 
   collideBallWithPaddle();
+  collideBallWithBlocks();
+}
+
+function collideBallWithBlocks() {
+  const b = state.ball;
+
+  for ( const blk of state.blocks ) {
+    if ( !blk.alive ) continue;
+    if ( b.x + b.size <= blk.x || b.x >= blk.x + blk.w ) continue;
+    if ( b.y + b.size <= blk.y || b.y >= blk.y + blk.h ) continue;
+
+    // penetración en cada eje: se rebota por el de menor penetración
+    const overlapX = Math.min( b.x + b.size - blk.x, blk.x + blk.w - b.x );
+    const overlapY = Math.min( b.y + b.size - blk.y, blk.y + blk.h - b.y );
+
+    if ( overlapX < overlapY ) {
+      const fromLeft = b.x + b.size / 2 < blk.x + blk.w / 2;
+      b.x += fromLeft ? -overlapX : overlapX;
+      b.vx = fromLeft ? -Math.abs( b.vx ) : Math.abs( b.vx );
+    } else {
+      const fromTop = b.y + b.size / 2 < blk.y + blk.h / 2;
+      b.y += fromTop ? -overlapY : overlapY;
+      b.vy = fromTop ? -Math.abs( b.vy ) : Math.abs( b.vy );
+    }
+
+    blk.alive = false;
+    state.score += BLOCK_POINTS;
+    return;   // solo se destruye un bloque por frame
+  }
 }
 
 const MAX_BOUNCE_ANGLE = 60 * Math.PI / 180;   // respecto a la vertical, en los bordes de la paleta
